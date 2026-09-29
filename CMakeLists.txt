@@ -19,6 +19,13 @@ find_package(imguizmo CONFIG REQUIRED)
 # Add source to this project's executable.
 add_executable (${PROJECT_NAME} GameEngineTemplate.cpp)
 
+# Disable RTTI and exceptions
+if (MSVC)
+    target_compile_options(${PROJECT_NAME} PRIVATE /GR- /EHs-c-)
+else()
+    target_compile_options(${PROJECT_NAME} PRIVATE -fno-rtti -fno-exceptions)
+endif()
+
 target_link_libraries(${PROJECT_NAME} PRIVATE glm::glm)
 target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3)
 

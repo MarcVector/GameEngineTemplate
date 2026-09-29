@@ -418,3 +418,15 @@ FodyWeavers.xsd
 *.msp
 
 build/
+
+# vcpkg
+vcpkg_cache/
+vcpkg_installed/
+vcpkg/buildtrees/
+vcpkg/packages/
+vcpkg/downloads/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+.ninja_log

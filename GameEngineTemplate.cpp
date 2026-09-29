@@ -1,4 +1,9 @@
 ﻿#include <iostream>
+#include <vector>
+#include <cstdio>
+
+#include <cstdarg>   // necesario para los "..." tipo printf
+#include <string>
 
 // OpenGL
 #include <glad/glad.h>
@@ -38,6 +43,13 @@ const char* fragmentShaderSource = "\n"
 "{\n"
 "   FragColor = vec4(vertexColor, 1.0f) + vec4(isOutline, isOutline, isOutline, isOutline);\n"
 "}\0";
+
+// Colors
+const ImVec4 Red{ 1.0f, 0.0f, 0.0f, 1.0f };
+const ImVec4 Blue{ 0.0f, 0.0f, 1.0f, 1.0f };
+const ImVec4 Green{ 0.0f, 1.0f, 0.0f, 1.0f };
+const ImVec4 Yellow{ 1.0f, 1.0f, 0.0f, 1.0f };
+
 
 struct FrameBufferObject
 {
@@ -91,6 +103,32 @@ void CreateFBO(int width, int height, FrameBufferObject& frameBufferObject, bool
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
+
+
+struct ConsoleLog {
+
+    struct LogLine {
+
+        std::string text;
+        std::string color; //´color of the text line (only possible colors are Red Blue Green and Yellow, since they are defined in this file)
+    };
+
+    std::vector <LogLine> lines; //stores the logs as strings
+    bool autoScroll = true; //enables and disables console auto-scrolling
+
+    void AddLog(const char* color, const char* mssg, ...) { //this function transforms the input to a string and stores it in the lines vector. It allows variable inputs just like a printf
+        char buf[1024];
+        va_list args;
+        va_start(args, mssg);
+        vsnprintf(buf, sizeof(buf), mssg, args);
+        va_end(args);
+        lines.push_back({buf, color});
+    }
+
+    void Clear() { lines.clear(); }
+
+};
+
 int main()
 {
     // Window Resolution
@@ -134,6 +172,10 @@ int main()
         return -1;
     }
 
+    //------------New--(Marc)
+    SDL_GL_SetSwapInterval(0);
+    //-------------------
+    
     // Init all OpenGL function pointers at runtime (not linked at compile time)
     gladLoadGL();
 
@@ -268,6 +310,41 @@ int main()
     const float SPEED = 100.0f;
 
     bool isRunning = true;
+
+    //Console Instance
+    struct ConsoleLog gConsole;
+    //----------------
+
+    //-----New--------- (Marc)
+    bool showSceneWindow = true;
+    bool showConfigWindow = false;
+    bool showConsoleWindow = false;
+    bool showAboutWindow = false;
+    bool showImGuiDemo = true;
+
+    //Application
+    char engineName[64] = "M2B Engine";
+    char organizatinName[64] = "UPC - CITM";
+    int maxFps = 60;
+    bool limitFramerate = true;
+
+    //Log Example for Testing
+    gConsole.AddLog("Blue","This is the FPS cap %d", maxFps);
+
+    std::vector<float> fpsLog;
+    std::vector<float> msLog;
+    const int FPS_LOG_SIZE = 90;
+
+    //Window
+    int windowWidth = SCREEN_WIDTH;
+    int windowHeight = SCREEN_HEIGHT;
+    bool isFullscreen = false;
+    bool isResizable = true;
+    bool isBorderless = false;
+    //-----------------
+
+
+
     FrameBufferObject frameBufferObject;
     CreateFBO(SCREEN_WIDTH, SCREEN_HEIGHT, frameBufferObject, false);
     ImVec2 sceneWindowSize(SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -319,6 +396,22 @@ int main()
         rotation += SPEED * dt;
         prevTime = currentTime;
 
+        //------New------(Marc)
+        //Get fps data every frame
+        float currentFPS = 0.0f;
+        if (dt > 0.0f) {
+            currentFPS = 1.0f / dt;
+        }
+        float currentMS = dt * 1000.0f;
+        if (fpsLog.size() >= FPS_LOG_SIZE) {
+            //Full vector-> dislplace and cycle
+            fpsLog.erase(fpsLog.begin());
+            msLog.erase(msLog.begin());
+        }
+        fpsLog.push_back(currentFPS);
+        msLog.push_back(currentMS);
+        //-------------------
+        
         // Clear screen color
         glClearColor(0.1f, 0.2f, 0.2f, 1.0f);
 
@@ -400,6 +493,47 @@ int main()
         ImGui::NewFrame();
         ImGuizmo::BeginFrame();
 
+        //-------New------(Marc)
+        if (ImGui::BeginMainMenuBar())
+        {
+            //FILE MENU
+            if (ImGui::BeginMenu("File")) {
+                if (ImGui::MenuItem("Exit")) {
+                    //Exit
+                    isRunning = false;
+                }
+                ImGui::EndMenu();
+            }
+
+            //VIEW MENU
+            if (ImGui::BeginMenu("View")) {
+                ImGui::MenuItem("Scene", nullptr, &showSceneWindow);
+                ImGui::MenuItem("Configuration", nullptr, &showConfigWindow);
+                ImGui::MenuItem("Console", nullptr, &showConsoleWindow);
+                ImGui::MenuItem("ImGui demo", nullptr, &showImGuiDemo);
+                ImGui::EndMenu();
+            }
+
+            //HELP MENU
+            if (ImGui::BeginMenu("Help")) {
+                if (ImGui::MenuItem("Github documentation")) {
+                    SDL_OpenURL("https://github.com/UPC-GameEngines-BCN-2026/M2B-Engine/");
+                }
+                if (ImGui::MenuItem("Report a bug")) {
+                    SDL_OpenURL("https://github.com/UPC-GameEngines-BCN-2026/M2B-Engine/issues");
+                }
+                if (ImGui::MenuItem("Download latest")) {
+                    SDL_OpenURL("https://github.com/UPC-GameEngines-BCN-2026/M2B-Engine/releases");
+                }
+                if (ImGui::MenuItem("About")) {
+                    showAboutWindow = true;
+                }
+                ImGui::EndMenu();
+            }
+
+            ImGui::EndMainMenuBar();
+        }
+        //-----------------
         const bool gizmoActive = ImGuizmo::IsOver() || ImGuizmo::IsUsing();
         ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
         if (gizmoActive)
@@ -407,21 +541,131 @@ int main()
             flags |= ImGuiWindowFlags_NoMove;
         }
 
-        ImGui::Begin("Scene", nullptr, flags);
-        ImVec2 cursorScreenPos = ImGui::GetCursorScreenPos();
-        ImVec2 newSceneWindowSize = ImGui::GetContentRegionAvail();
-        shouldRefreshSceneWindow = (newSceneWindowSize.x != sceneWindowSize.x || newSceneWindowSize.y != sceneWindowSize.y);
-        sceneWindowSize = newSceneWindowSize;
-        ImGui::Image(frameBufferObject.RENDER_TO_TEXTURE_ID, newSceneWindowSize, ImVec2(0, 1), ImVec2(1, 0));
+        if(showSceneWindow)
+        {
+            ImGui::Begin("Scene", nullptr, flags);
+            ImVec2 cursorScreenPos = ImGui::GetCursorScreenPos();
+            ImVec2 newSceneWindowSize = ImGui::GetContentRegionAvail();
+            shouldRefreshSceneWindow = (newSceneWindowSize.x != sceneWindowSize.x || newSceneWindowSize.y != sceneWindowSize.y);
+            sceneWindowSize = newSceneWindowSize;
+            ImGui::Image(frameBufferObject.RENDER_TO_TEXTURE_ID, newSceneWindowSize, ImVec2(0, 1), ImVec2(1, 0));
 
-        glDisable(GL_DEPTH_TEST);
-        ImGuizmo::SetRect(cursorScreenPos.x, cursorScreenPos.y, newSceneWindowSize.x, newSceneWindowSize.y);
-        ImGuizmo::SetDrawlist();
-        ImGuizmo::Manipulate(glm::value_ptr(viewMatrix), glm::value_ptr(projectionMatrix), ImGuizmo::TRANSLATE, ImGuizmo::WORLD, glm::value_ptr(modelMatrix));
-        glEnable(GL_DEPTH_TEST);
-        ImGui::End();
+            glDisable(GL_DEPTH_TEST);
+            ImGuizmo::SetRect(cursorScreenPos.x, cursorScreenPos.y, newSceneWindowSize.x, newSceneWindowSize.y);
+            ImGuizmo::SetDrawlist();
+            ImGuizmo::Manipulate(glm::value_ptr(viewMatrix), glm::value_ptr(projectionMatrix), ImGuizmo::TRANSLATE, ImGuizmo::WORLD, glm::value_ptr(modelMatrix));
+            glEnable(GL_DEPTH_TEST);
+            ImGui::End();
+        }
 
-        ImGui::ShowDemoWindow();
+        if (showConsoleWindow) {
+            ImGui::Begin("Console", &showConsoleWindow);
+
+            if (ImGui::Button("Clear")) {
+                gConsole.lines.clear();
+            }
+            ImGui::SameLine();
+            ImGui::Checkbox("Auto-scroll", &gConsole.autoScroll);
+            ImGui::Separator();
+
+            ImGui::BeginChild("ScrollingRegion", ImVec2(0, 0), false,
+                ImGuiWindowFlags_HorizontalScrollbar);
+                
+            for (const ConsoleLog::LogLine& line : gConsole.lines)
+            {
+                if (line.color == "Red") { ImGui::TextColored(Red, "%s", line.text.c_str()); }
+                else if (line.color == "Green") { ImGui::TextColored(Green, "%s", line.text.c_str()); }
+                else if (line.color == "Blue") { ImGui::TextColored(Blue, "%s", line.text.c_str()); }
+                else if (line.color == "Yellow") { ImGui::TextColored(Yellow, "%s", line.text.c_str()); }
+                else { ImGui::TextUnformatted(line.text.c_str()); }
+            }
+            
+
+            if (gConsole.autoScroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY()) {
+                ImGui::SetScrollHereY(1.0f);
+            }
+
+            ImGui::EndChild();
+            ImGui::End();
+        }
+
+        //---------New---(Marc)
+        if (showConfigWindow) {
+            ImGui::Begin("Configuration", &showConfigWindow);
+
+            //Application
+            if (ImGui::CollapsingHeader("Application")) {
+                ImGui::InputText("App name", engineName, IM_ARRAYSIZE(engineName));
+                ImGui::InputText("Organization", organizatinName, IM_ARRAYSIZE(organizatinName));
+
+                ImGui::Checkbox("Limit framerate", &limitFramerate);
+                if (limitFramerate) {
+                    ImGui::SliderInt("Max FPS", &maxFps, 10, 240);
+                }
+
+                if (!fpsLog.empty()) {
+                    char fpsTitle[25];
+                    sprintf_s(fpsTitle, 25, "Framerate %.1f", fpsLog[fpsLog.size() - 1]);
+                    ImGui::PlotHistogram("##framerate", &fpsLog[0], (int)fpsLog.size(), 0, fpsTitle, 0.0f, 100.0f, ImVec2(310, 100));
+
+                    char msTitle[25];
+                    sprintf_s(msTitle, 25, "Milliseconds %.1f", msLog[msLog.size() - 1]);
+                    ImGui::PlotHistogram("##milliseconds", &msLog[0], (int)msLog.size(), 0, msTitle, 0.0f, 40.0f, ImVec2(310, 100));
+                }
+            }
+
+            //Window
+            if (ImGui::CollapsingHeader("Window")) {
+                if (ImGui::SliderInt("Width", &windowWidth, 640, 1920)) {
+                    SDL_SetWindowSize(window, windowWidth, windowHeight);
+                }
+                if (ImGui::SliderInt("Height", &windowHeight, 480, 1080)) {
+                    SDL_SetWindowSize(window, windowWidth, windowHeight);
+                }
+
+                if (ImGui::Checkbox("Fullscreen", &isFullscreen)) {
+                    SDL_SetWindowFullscreen(window, isFullscreen);
+                }
+                if (ImGui::Checkbox("Resizable", &isResizable)) {
+                    SDL_SetWindowResizable(window, isResizable);
+                }
+                if (ImGui::Checkbox("Borderless", &isBorderless)) {
+                    SDL_SetWindowBordered(window, !isBorderless);
+                    SDL_SyncWindow(window); //forces the change
+                }
+            }
+
+            //hardware info
+            if (ImGui::CollapsingHeader("Hardware info")) {
+                int numCPU = SDL_GetNumLogicalCPUCores();
+                int cacheSize = SDL_GetCPUCacheLineSize();
+                int systemRam = SDL_GetSystemRAM();
+
+                ImGui::Text("CPUs: %d (Cache: %d bytes)", numCPU, cacheSize);
+                ImGui::Text("System RAM: %d Mb", systemRam);
+
+                const GLubyte* vendor = glGetString(GL_VENDOR);
+                const GLubyte* renderer = glGetString(GL_RENDER);
+                const GLubyte* glVersion = glGetString(GL_VERSION);
+
+                ImGui::Text("GPU vendor: %s", vendor);
+                ImGui::Text("GPU renderer: %s", renderer);
+                ImGui::Text("OpenGl version: %s", glVersion);
+            }
+
+            ImGui::End();
+        }
+        if (showAboutWindow) {
+            ImGui::Begin("About", &showAboutWindow);
+            ImGui::Text("Work in progress");
+            ImGui::End();
+        }
+        //---------------
+
+        if(showImGuiDemo)
+        {
+            ImGui::ShowDemoWindow();
+        }
 
         // Render ImGui
         ImGui::Render();
@@ -431,7 +675,19 @@ int main()
         SDL_GL_SwapWindow(window);
 
         // FRAME CONTROL
-        // [...]
+        //------------New--(Marc)
+        if (limitFramerate && maxFps > 0) {
+            SDL_Time frameEndTime;
+            SDL_GetCurrentTime(&frameEndTime);
+
+            float frameElapsedMS = (frameEndTime - currentTime) / 1000000.0f; //ns->ms
+            float targetFrameMS = 1000 / (float)maxFps;
+
+            if (frameElapsedMS < targetFrameMS) { //if frame is quicker, wait(delay)
+                SDL_Delay((Uint32)(targetFrameMS - frameElapsedMS));
+            }
+        }
+        //--------------------
     }
 
     // Delete VAO, VBO and shader program
